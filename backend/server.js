@@ -2,6 +2,9 @@ import express from 'express'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit';
 import {authRouter} from './routes/auth.js'
+import { analysisRouter } from './routes/analysis.js';
+import { sessionRouter } from './routes/session.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -18,7 +21,13 @@ const globalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHe
 app.use(globalLimiter);
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many auth attempts. Try again in 15 minutes.' } });
+
 app.use('/api/auth', authLimiter, authRouter);
+app.use('/api/analysis', analysisRouter);
+app.use('/api/session',sessionRouter);
+
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.use(errorHandler);
 
 app.listen(PORT, () => console.log(`Backend is up and running on port ${PORT}`));
 export default app;
