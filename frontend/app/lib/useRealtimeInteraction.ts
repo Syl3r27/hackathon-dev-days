@@ -18,7 +18,7 @@ interface RealtimeMessage {
 }
 
 export function useRealtimeInteraction() {
-  const { setError, sessionId } = useAppStore();
+  const { setError, sessionId, setSessionId } = useAppStore();
   const { videoRef, startCamera, stopCamera, captureFrame, isActive } = useCamera();
   const { speak, stop: stopSpeech } = useElevenLabs();
   
@@ -27,65 +27,84 @@ export function useRealtimeInteraction() {
   const [currentResponse, setCurrentResponse] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [captureCounter, setCaptureCounter] = useState(0);
+  const [isListening, setIsListening] = useState(false);
   
   const loopRef = useRef<NodeJS.Timeout | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recognitionRef = useRef<any>(null);
-  const isListeningRef = useRef(false);
+  const stateRef = useRef({ isRunning: false, sessionId: '', messages: [] as RealtimeMessage[] });
+  const captureRef = useRef<(() => Promise<void>) | null>(null);
+
+  // Update refs with current state for use in callbacks
+  useEffect(() => {
+    stateRef.current.isRunning = isRunning;
+    stateRef.current.sessionId = sessionId || '';
+    stateRef.current.messages = messages;
+  }, [isRunning, sessionId, messages]);
 
   // Initialize speech recognition
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SR) {
-      const recognition = new SR();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        isListeningRef.current = true;
-      };
-
-      recognition.onend = () => {
-        isListeningRef.current = false;
-      };
-
-      recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            transcript += event.results[i][0].transcript + ' ';
-          }
-        }
-        if (transcript.trim()) {
-          handleUserInput(transcript.trim());
-        }
-      };
-
-      recognition.onerror = (event: any) => {
-        console.warn('[Speech Recognition]', event.error);
-      };
-
-      recognitionRef.current = recognition;
+    if (!SR) {
+      console.warn('Speech Recognition not available');
+      return;
     }
 
+    const recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      console.log('[Speech] Listening...');
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      console.log('[Speech] Stopped listening');
+    };
+
+    recognition.onresult = (event: any) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      if (transcript.trim()) {
+        console.log('[Speech] Detected:', transcript);
+        processUserInput(transcript.trim());
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.warn('[Speech Error]', event.error);
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+
     return () => {
-      recognitionRef.current?.abort();
+      recognition.abort();
     };
   }, []);
 
-  const handleUserInput = useCallback(async (userMessage: string) => {
-    if (isListeningRef.current && recognitionRef.current) {
-      recognitionRef.current.abort();
-      isListeningRef.current = false;
+  const processUserInput = useCallback(async (userMessage: string) => {
+    if (!stateRef.current.sessionId) {
+      setError('Session not initialized. Please wait for first analysis.');
+      return;
     }
 
-    setMessages(prev => [...prev, { role: 'user', content: userMessage, timestamp: Date.now() }]);
+    console.log('[Processing] User input:', userMessage);
+    setIsListening(false);
     setIsProcessing(true);
-    setCurrentResponse('');
+
+    // Add user message to messages
+    setMessages(prev => [...prev, { role: 'user', content: userMessage, timestamp: Date.now() }]);
 
     try {
       const token = getToken();
+      console.log('[API] Calling /api/analysis/continue');
+
       const res = await fetch(`${API_BASE}/api/analysis/continue`, {
         method: 'POST',
         headers: {
@@ -93,38 +112,69 @@ export function useRealtimeInteraction() {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
-          sessionId: sessionId || undefined,
+          sessionId: stateRef.current.sessionId,
           userMessage,
-          conversationHistory: messages.map(m => ({
-            role: m.role,
-            content: m.content
-          }))
+          conversationHistory: stateRef.current.messages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .map(m => ({ role: m.role, content: m.content }))
         })
       });
 
       if (!res.ok) {
-        throw new Error(`API error: ${res.status}`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `API error ${res.status}`);
       }
 
       const data = await res.json();
-      const assistantMessage = data.response || data.message || 'I understand.';
-      
+      const assistantMessage = data.response || data.recommendationReason || data.message || 'Processing...';
+
+      console.log('[Response]', assistantMessage);
+
+      // Add assistant message
       setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage, timestamp: Date.now() }]);
       setCurrentResponse(assistantMessage);
 
-      // Speak the response
+      // Speak response
       await speak(assistantMessage);
 
-      // Reset silence timer for next capture
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      // Resume capturing after short delay
+      setIsProcessing(false);
+      if (stateRef.current.isRunning) {
+        console.log('[Resume] Restarting listening after user input');
+        setTimeout(() => startListening(), 1000);
+      }
     } catch (err: any) {
+      console.error('[Error]', err.message);
       setError(err.message || 'Failed to process input');
       setIsProcessing(false);
+      // Try to resume anyway
+      if (stateRef.current.isRunning) {
+        setTimeout(() => startListening(), 1000);
+      }
     }
-  }, [messages, sessionId, speak, setError]);
+  }, [speak, setError, startListening]);
+
+  const startListening = useCallback(() => {
+    if (recognitionRef.current && stateRef.current.isRunning && !isListening) {
+      try {
+        recognitionRef.current.start();
+        console.log('[Speech] Starting to listen');
+
+        // Auto-capture if no speech for 6 seconds
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = setTimeout(() => {
+          console.log('[Timeout] No speech detected, capturing frame');
+          if (recognitionRef.current) recognitionRef.current.abort();
+          if (captureRef.current) captureRef.current();
+        }, 6000);
+      } catch (err) {
+        console.warn('[Speech] Already listening');
+      }
+    }
+  }, [isListening]);
 
   const captureAndAnalyze = useCallback(async () => {
-    if (!isRunning || isProcessing || !isActive()) return;
+    if (!stateRef.current.isRunning || isProcessing || !isActive()) return;
 
     const frame = captureFrame();
     if (!frame) return;
@@ -134,6 +184,49 @@ export function useRealtimeInteraction() {
 
     try {
       const token = getToken();
+
+      // First capture - create session
+      if (!stateRef.current.sessionId) {
+        console.log('[Analyze] First capture - creating session');
+        const res = await fetch(`${API_BASE}/api/analysis/analyze`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            imageBase64: frame,
+            mimeType: 'image/jpeg',
+            userMessage: 'Analyze this item.'
+          })
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `API error ${res.status}`);
+        }
+
+        const data = await res.json();
+        const newSessionId = data.sessionId;
+        const assistantMessage = data.decisions?.recommendationReason || 'Analyzing...';
+
+        console.log('[Session Created]', newSessionId);
+        setSessionId(newSessionId);
+        stateRef.current.sessionId = newSessionId;
+
+        setCurrentResponse(assistantMessage);
+        setMessages([{ role: 'assistant', content: assistantMessage, timestamp: Date.now() }]);
+
+        await speak(assistantMessage);
+        setIsProcessing(false);
+
+        // Start listening after first analysis
+        startListening();
+        return;
+      }
+
+      // Subsequent captures - use continue
+      console.log('[Analyze] Continuous frame capture');
       const res = await fetch(`${API_BASE}/api/analysis/continue`, {
         method: 'POST',
         headers: {
@@ -141,10 +234,10 @@ export function useRealtimeInteraction() {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
-          sessionId: sessionId || undefined,
+          sessionId: stateRef.current.sessionId,
           imageBase64: frame,
-          userMessage: 'Analyze this frame and provide real-time feedback.',
-          conversationHistory: messages.slice(-6).map(m => ({
+          userMessage: 'Analyze current frame.',
+          conversationHistory: stateRef.current.messages.map(m => ({
             role: m.role,
             content: m.content
           }))
@@ -152,68 +245,64 @@ export function useRealtimeInteraction() {
       });
 
       if (!res.ok) {
-        throw new Error(`API error: ${res.status}`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `API error ${res.status}`);
       }
 
       const data = await res.json();
       const assistantMessage = data.response || data.message || 'Analyzing...';
-      
+
+      console.log('[Frame Response]', assistantMessage);
       setCurrentResponse(assistantMessage);
+      setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage, timestamp: Date.now() }]);
 
-      // Speak the response
       await speak(assistantMessage);
-
-      // Add to messages
-      setMessages(prev => [...prev, 
-        { role: 'assistant', content: assistantMessage, timestamp: Date.now() }
-      ]);
-
       setIsProcessing(false);
 
-      // Start listening for user input
-      if (recognitionRef.current && !isListeningRef.current) {
-        recognitionRef.current.start();
-        
-        // Auto-restart listening if no speech detected after 8 seconds
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = setTimeout(() => {
-          if (isRunning && !isProcessing) {
-            captureAndAnalyze(); // Capture next frame
-          }
-        }, 8000);
-      }
+      // Start listening after analysis
+      startListening();
     } catch (err: any) {
+      console.error('[Capture Error]', err.message);
       setError(err.message || 'Frame analysis failed');
       setIsProcessing(false);
     }
-  }, [isRunning, isProcessing, isActive, captureFrame, messages, sessionId, speak, setError]);
+  }, [isProcessing, isActive, captureFrame, speak, setError, startListening]);
+
+  // Store captureAndAnalyze in ref so it can be called from timeout
+  useEffect(() => {
+    captureRef.current = captureAndAnalyze;
+  }, [captureAndAnalyze]);
+
+
 
   const start = useCallback(async () => {
     try {
+      console.log('[Start] Initializing real-time interaction');
       await startCamera();
       setIsRunning(true);
       setMessages([]);
       setCurrentResponse('');
+      setCaptureCounter(0);
 
-      // Start continuous capture loop (every 3 seconds)
-      loopRef.current = setInterval(() => {
+      // Trigger first capture immediately
+      console.log('[Start] Triggering first capture');
+      setTimeout(() => {
         captureAndAnalyze();
-      }, 3000);
-
-      // Initial capture
-      setTimeout(captureAndAnalyze, 500);
+      }, 500);
     } catch (err: any) {
+      console.error('[Start Error]', err.message);
       setError(err.message || 'Failed to start camera');
+      setIsRunning(false);
     }
   }, [startCamera, captureAndAnalyze, setError]);
 
   const stop = useCallback(() => {
+    console.log('[Stop] Shutting down real-time interaction');
     setIsRunning(false);
     if (loopRef.current) clearInterval(loopRef.current);
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    if (recognitionRef.current && isListeningRef.current) {
+    if (recognitionRef.current) {
       recognitionRef.current.abort();
-      isListeningRef.current = false;
     }
     stopSpeech();
     stopCamera();
@@ -230,9 +319,9 @@ export function useRealtimeInteraction() {
     currentResponse,
     isProcessing,
     captureCounter,
-    isListening: isListeningRef.current,
+    isListening,
     start,
     stop,
-    handleUserInput
+    handleUserInput: processUserInput
   };
 }
