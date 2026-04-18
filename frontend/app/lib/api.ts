@@ -77,3 +77,12 @@ export async function authLogin(email: string, password: string) {
 export async function authLogout() {
   return request<any>('/api/auth/logout', { method: 'POST' });
 }
+
+
+
+
+
+
+export async function completeAction(co2Avoided: number, itemsSaved = 1) {
+  return request<any>('/api/analysis/complete', { method: 'POST', body: JSON.stringify({ co2Avoided, itemsSaved }) }).catch(() => {});
+}
