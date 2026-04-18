@@ -1,11 +1,13 @@
-import Database from "better-sqlite3";
-import path from 'path'
+import Database from 'better-sqlite3';
+import path from 'path';
 
 const dbPath = path.resolve(process.cwd(), 'database.sqlite');
 const db = new Database(dbPath);
 
+// Enable WAL mode for better concurrency and performance
 db.pragma('journal_mode = WAL');
 
+// Ensure tables exist
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -33,4 +35,3 @@ db.exec(`
 `);
 
 export default db;
-

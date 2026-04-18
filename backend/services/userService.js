@@ -1,30 +1,31 @@
+/**
+ * User store — uses a local SQLite database via the shared db module.
+ */
 import bcrypt from 'bcryptjs';
-import {v4 as uuidv4} from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import db from '../lib/db.js';
 
-export async function createUser({name, email,password}){
-    const exist = await findUserByEmail(email);
-    if(exist) throw Object.assign(new Error('Email already registered'),{status:409});
+export async function createUser({ name, email, password }) {
+  const existing = await findUserByEmail(email);
+  if (existing) throw Object.assign(new Error('Email already registered'), { status: 409 });
 
-    const passwordHash = await bcrypt.hash(password,12);
+  const passwordHash = await bcrypt.hash(password, 12);
+  const user = {
+    id: uuidv4(),
+    name: name.trim(),
+    email: email.toLowerCase().trim(),
+    passwordHash,
+    createdAt: new Date().toISOString(),
+    analysisCount: 0,
+    itemsSaved: 0,
+    co2Saved: 0
+  };
 
-    const user = {
-        id:uuidv4(),
-        name:name.trim(),
-        email:email.toLowerCase().trim(),
-        passwordHash,
-        createdAt: new Date().toISOString(),
-        analysisCount:0,
-        itemsSaved:0,
-        co2Saved:0
+  const insert = db.prepare('INSERT INTO users (id, name, email, passwordHash, createdAt, analysisCount, itemsSaved, co2Saved) VALUES (@id, @name, @email, @passwordHash, @createdAt, @analysisCount, @itemsSaved, @co2Saved)');
+  insert.run(user);
 
-    };
-
-    const insert = db.prepare("INSERT INTO users (id, name, email, passwordHash, createdAt , analysisCount, itemsSaved, co2Saved) VALUES(@id, @name, @email, @passwordHash, @createdAt, @analysisCount, @itemsSaved, @co2Saved)");
-    insert.run(user);
-
-    const {passwordHash: _, ...safeUser} = user;
-    return safeUser;
+  const { passwordHash: _, ...safeUser } = user;
+  return safeUser;
 }
 
 export async function findUserByEmail(email) {

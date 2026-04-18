@@ -1,11 +1,9 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 const MODEL = 'gemini-3-flash-preview';
 
-// Visual Analysis ke liye  
-
+// ── Step 1: Visual Analysis ────────────────────────────────────────────────────
 const VISION_PROMPT = `You are a precise visual analyst for a sustainability repair app.
 Analyze this household item image. Return ONLY valid JSON (no markdown, no explanation):
 {
@@ -19,8 +17,7 @@ Analyze this household item image. Return ONLY valid JSON (no markdown, no expla
   "summary": "2-3 sentence plain English description for a non-technical user"
 }`;
 
-// Reasoning Step + Decision engine
-
+// ── Step 2: Reasoning + Decision Engine ───────────────────────────────────────
 function buildReasoningPrompt(visualAnalysis, conversationHistory, userMessage) {
   const historyText = (conversationHistory || [])
     .slice(-6)
@@ -75,7 +72,7 @@ Generate a comprehensive sustainability decision analysis. Return ONLY valid JSO
 }`;
 }
 
-// Repair Step damage Details
+// ── Step 3: Repair Step Detail ─────────────────────────────────────────────────
 function buildStepPrompt(option, step, itemDescription) {
   return `You are guiding a user step-by-step through: ${option.action} of ${itemDescription}.
 Current step to explain in detail: "${step}"
@@ -91,48 +88,34 @@ Return ONLY valid JSON:
 }`;
 }
 
-// API CALL 
-export async function analyzeImageWithGemini(base64Image, mimeType = 'image/jpeg') {
+// ── Public API ─────────────────────────────────────────────────────────────────
+async function generateJsonFromPrompt(promptContent, fallback, errorContext) {
   try {
-    const model = genAI.getGenerativeModel({ model: MODEL });
-    const result = await model.generateContent([
-      VISION_PROMPT,
-      { inlineData: { data: base64Image, mimeType } }
-    ]);
-    const text = result.response.text();
-    const m = text.match(/\{[\s\S]*\}/);
+    const result = await genAI.getGenerativeModel({ model: MODEL }).generateContent(promptContent);
+    const m = result.response.text().match(/\{[\s\S]*\}/);
     if (m) return JSON.parse(m[0]);
   } catch (err) {
-    console.error('Gemini API Error (Analyze Image):', err.message);
+    console.error(`Gemini API Error (${errorContext}):`, err.message);
   }
-  return { objectType: 'Item', condition: 'unknown', components: [], damageDetails: [], repairability: 'unknown', summary: 'Could not analyze image due to a temporary API disruption. Proceeding with basic profile.' };
+  return fallback;
+}
+
+export async function analyzeImageWithGemini(base64Image, mimeType = 'image/jpeg') {
+  const fallback = { objectType: 'Item', condition: 'unknown', components: [], damageDetails: [], repairability: 'unknown', summary: 'Could not analyze image due to a temporary API disruption. Proceeding with basic profile.' };
+  return generateJsonFromPrompt([VISION_PROMPT, { inlineData: { data: base64Image, mimeType } }], fallback, 'Analyze Image');
 }
 
 export async function generateDecisionsWithGemini(visualAnalysis, conversationHistory, userMessage) {
-  try {
-    const model = genAI.getGenerativeModel({ model: MODEL });
-    const prompt = buildReasoningPrompt(visualAnalysis, conversationHistory, userMessage);
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const m = text.match(/\{[\s\S]*\}/);
-    if (m) return JSON.parse(m[0]);
-  } catch (err) {
-    console.error('Gemini API Error (Decisions):', err.message);
-  }
-  return buildFallbackDecisions();
+  return generateJsonFromPrompt(
+    buildReasoningPrompt(visualAnalysis, conversationHistory, userMessage),
+    buildFallbackDecisions(),
+    'Decisions'
+  );
 }
 
 export async function generateRepairStepDetail(option, step, itemDescription) {
-  try {
-    const model = genAI.getGenerativeModel({ model: MODEL });
-    const result = await model.generateContent(buildStepPrompt(option, step, itemDescription));
-    const text = result.response.text();
-    const m = text.match(/\{[\s\S]*\}/);
-    if (m) return JSON.parse(m[0]);
-  } catch (err) {
-    console.error('Gemini API Error (Repair Step):', err.message);
-  }
-  return { stepTitle: step, detailedInstructions: 'Follow the standard procedure carefully.', warnings: [], tips: ['Proceed cautiously.', 'Consult the manual if stuck.'], estimatedTime: 'A few minutes', nextStepHint: '' };
+  const fallback = { stepTitle: step, detailedInstructions: 'Follow the standard procedure carefully.', warnings: [], tips: ['Proceed cautiously.', 'Consult the manual if stuck.'], estimatedTime: 'A few minutes', nextStepHint: '' };
+  return generateJsonFromPrompt(buildStepPrompt(option, step, itemDescription), fallback, 'Repair Step');
 }
 
 function buildFallbackDecisions() {

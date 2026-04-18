@@ -3,7 +3,6 @@ import { create } from 'zustand';
 
 export type AppPhase = 'auth' | 'landing' | 'scanning' | 'decisions' | 'repairing' | 'impact';
 
-
 interface AppState {
   phase: AppPhase;
   sessionId: string | null;

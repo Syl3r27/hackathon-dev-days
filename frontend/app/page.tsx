@@ -3,6 +3,11 @@ import { useAppStore } from './lib/store';
 import { useAuthStore } from './lib/authStore';
 import AppInitializer from './components/AppInitializer';
 import AuthScreen from './components/AuthScreen';
+import LandingScreen from './components/LandingScreen';
+import ScanningScreen from './components/ScanningScreen';
+import DecisionsScreen from './components/DecisionsScreen';
+import RepairScreen from './components/RepairScreen';
+import ImpactScreen from './components/ImpactScreen';
 
 function ErrorToast() {
   const { error, setError } = useAppStore();
@@ -39,6 +44,11 @@ export default function Page() {
       {!isInitialized ? <LoadingScreen /> : (
         <>
           {phase === 'auth' && <AuthScreen />}
+          {phase === 'landing' && <LandingScreen />}
+          {phase === 'scanning' && <ScanningScreen />}
+          {phase === 'decisions' && <DecisionsScreen />}
+          {phase === 'repairing' && <RepairScreen />}
+          {phase === 'impact' && <ImpactScreen />}
         </>
       )}
     </AppInitializer>

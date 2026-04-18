@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 
 export const analysisRouter = Router();
 
+// All analysis routes require authentication
 analysisRouter.use(requireAuth);
 analysisRouter.post('/analyze', analyzeItem);
 analysisRouter.post('/repair-step', getRepairStep);

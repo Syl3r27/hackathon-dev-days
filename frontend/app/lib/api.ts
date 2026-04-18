@@ -1,6 +1,5 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-
 function getTokens() {
   if (typeof window === 'undefined') return { accessToken: null, refreshToken: null };
   return {
@@ -8,7 +7,6 @@ function getTokens() {
     refreshToken: localStorage.getItem('relife_refresh_token')
   };
 }
-
 
 async function refreshAccessToken(): Promise<string | null> {
   const { refreshToken } = getTokens();
@@ -25,7 +23,6 @@ async function refreshAccessToken(): Promise<string | null> {
     return data.accessToken;
   } catch { return null; }
 }
-
 
 async function request<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
   const { accessToken } = getTokens();
@@ -59,17 +56,42 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
   return res.json();
 }
 
-
-
-
+// ── Auth ───────────────────────────────────────────────────────────────────────
 export async function authRegister(name: string, email: string, password: string) {
   return request<any>('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) });
+}
+
+export async function authLogin(email: string, password: string) {
+  return request<any>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
 }
 
 export async function authMe() {
   return request<any>('/api/auth/me');
 }
 
-export async function authLogin(email: string, password: string) {
-  return request<any>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+export async function authLogout() {
+  return request<any>('/api/auth/logout', { method: 'POST' });
+}
+
+// ── Analysis ──────────────────────────────────────────────────────────────────
+export async function analyzeItem(imageBase64: string, userMessage: string, sessionId?: string) {
+  return request<any>('/api/analysis/analyze', { method: 'POST', body: JSON.stringify({ imageBase64, mimeType: 'image/jpeg', userMessage, sessionId }) });
+}
+
+export async function getRepairStep(sessionId: string, optionData: any, stepIndex: number) {
+  return request<any>('/api/analysis/repair-step', { method: 'POST', body: JSON.stringify({ sessionId, optionData, stepIndex }) });
+}
+
+export async function completeAction(co2Avoided: number, itemsSaved = 1) {
+  return request<any>('/api/analysis/complete', { method: 'POST', body: JSON.stringify({ co2Avoided, itemsSaved }) }).catch(() => {});
+}
+
+// ── Voice ─────────────────────────────────────────────────────────────────────
+export async function voiceStatus() {
+  const res = await fetch(`${API_BASE}/api/voice/status`);
+  return res.ok ? res.json() : { available: false };
+}
+
+export async function listVoices() {
+  return request<any>('/api/voice/voices');
 }
