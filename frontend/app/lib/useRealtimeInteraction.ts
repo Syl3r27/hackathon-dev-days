@@ -152,7 +152,8 @@ export function useRealtimeInteraction() {
         setTimeout(() => startListening(), 1000);
       }
     }
-  }, [speak, setError, startListening]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speak, setError]);
 
   const startListening = useCallback(() => {
     if (recognitionRef.current && stateRef.current.isRunning && !isListening) {
