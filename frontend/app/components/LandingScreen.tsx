@@ -35,7 +35,7 @@ export default function LandingScreen() {
   }, []);
 
   const handleLogout = async () => {
-    await authLogout().catch(() => {});
+    await authLogout().catch(() => { });
     clearAuth();
     setPhase('auth');
   };
@@ -56,7 +56,7 @@ export default function LandingScreen() {
 
   return (
     <div ref={ref} className="min-h-screen w-full relative flex flex-col items-center justify-center pt-24 pb-16 px-6 lg:px-16 overflow-hidden">
-      
+
       {/* Dynamic Earthy Background Elements */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[var(--accent-light)] opacity-20 blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-[var(--accent-main)] opacity-10 blur-[150px] pointer-events-none"></div>
@@ -88,7 +88,7 @@ export default function LandingScreen() {
 
       {/* Main Content */}
       <div className="relative z-10 w-full max-w-5xl mx-auto flex flex-col items-center text-center mt-8">
-        
+
         <div className="perspective-1000 mb-8">
           <h1 className="ll-h1 font-serif text-[clamp(4rem,10vw,8.5rem)] leading-[0.95] tracking-tight text-[var(--text-main)] block">
             Repair the
@@ -134,9 +134,9 @@ export default function LandingScreen() {
             </div>
           ))}
         </div>
-        
+
         <p className="ll-stat mt-12 text-xs uppercase tracking-[0.2em] font-mono text-[var(--text-muted)]">
-          Powered by Gemini 2.0 Flash Intelligent Vision
+          Powered by Gemini 3.0 Flash Intelligent Vision
         </p>
 
       </div>

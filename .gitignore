@@ -18,6 +18,15 @@ logs
 Thumbs.db
 .DS_Store
 
+# Test Server
+backend/uploads/
+backend/test-image.png
+
+# Database
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
 # Editor
 .vscode/
 .idea/

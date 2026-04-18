@@ -2,74 +2,33 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const MODEL = 'gemini-3-flash-preview';
+// Cache model instance — avoids SDK overhead on every call
+const model = genAI.getGenerativeModel({ model: MODEL });
 
 // ── Step 1: Visual Analysis ────────────────────────────────────────────────────
-const VISION_PROMPT = `You are a precise visual analyst for a sustainability repair app.
-Analyze this household item image. Return ONLY valid JSON (no markdown, no explanation):
-{
-  "objectType": "specific item name",
-  "brand": "brand name or null",
-  "components": ["list of visible parts"],
-  "condition": "good|fair|poor|broken",
-  "damageDetails": ["specific damage observations"],
-  "repairability": "easy|moderate|difficult|not-recommended",
-  "estimatedAge": "age estimate or null",
-  "summary": "2-3 sentence plain English description for a non-technical user"
-}`;
+const VISION_PROMPT = `You are a visual analyst for a sustainability repair app.
+Analyze this household item image. Return ONLY valid compact JSON (no markdown):
+{"objectType":"...","brand":null,"condition":"good|fair|poor|broken","damageDetails":[],"repairability":"easy|moderate|difficult|not-recommended","summary":"2-sentence plain English description"}`;
 
 // ── Step 2: Reasoning + Decision Engine ───────────────────────────────────────
 function buildReasoningPrompt(visualAnalysis, conversationHistory, userMessage) {
   const historyText = (conversationHistory || [])
-    .slice(-6)
+    .slice(-4)  // fewer tokens
     .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
     .join('\n');
 
-  return `You are ReLife AI, a sustainability-focused repair expert. Your mission is to help users fix, repurpose, or responsibly dispose of household items. Always prioritize sustainability over replacement.
+  return `You are ReLife AI, a sustainability repair expert. Prioritise sustainability over replacement.
 
-VISUAL ANALYSIS RESULT:
-${JSON.stringify(visualAnalysis, null, 2)}
+VISUAL ANALYSIS:
+${JSON.stringify(visualAnalysis)}
 
-CONVERSATION HISTORY:
+CONVERSATION:
 ${historyText || 'First interaction.'}
 
-USER MESSAGE: "${userMessage}"
+USER: "${userMessage}"
 
-Generate a comprehensive sustainability decision analysis. Return ONLY valid JSON (no markdown, no code fences):
-{
-  "diagnosis": {
-    "primaryIssue": "main problem identified",
-    "likelyCause": "probable root cause",
-    "severity": "minor|moderate|severe",
-    "confidence": 0.85
-  },
-  "clarifyingQuestions": [],
-  "options": [
-    {
-      "action": "Repair",
-      "description": "specific repair description for this item",
-      "estimatedCost": { "min": 0, "max": 0, "currency": "INR" },
-      "timeRequired": "e.g. 1-2 hours",
-      "difficulty": "beginner|intermediate|advanced",
-      "environmentalImpact": { "score": 9, "label": "Excellent", "kgCO2Saved": 5.2 },
-      "repairSteps": ["Step 1", "Step 2", "Step 3"],
-      "toolsNeeded": ["tool1", "tool2"],
-      "recommended": false
-    },
-    { "action": "Replace Component", "description": "...", "estimatedCost": {"min":0,"max":0,"currency":"INR"}, "timeRequired": "...", "difficulty": "intermediate", "environmentalImpact": {"score":8,"label":"Good","kgCO2Saved":4.0}, "repairSteps": [], "toolsNeeded": [], "recommended": false },
-    { "action": "Resell for Parts", "description": "...", "estimatedCost": {"min":0,"max":0,"currency":"INR"}, "timeRequired": "...", "difficulty": "beginner", "environmentalImpact": {"score":7,"label":"Good","kgCO2Saved":3.0}, "repairSteps": [], "toolsNeeded": [], "recommended": false },
-    { "action": "Donate", "description": "...", "estimatedCost": {"min":0,"max":0,"currency":"INR"}, "timeRequired": "...", "difficulty": "beginner", "environmentalImpact": {"score":6,"label":"Fair","kgCO2Saved":2.0}, "repairSteps": [], "toolsNeeded": [], "recommended": false },
-    { "action": "Recycle", "description": "...", "estimatedCost": {"min":0,"max":0,"currency":"INR"}, "timeRequired": "...", "difficulty": "beginner", "environmentalImpact": {"score":5,"label":"Fair","kgCO2Saved":1.0}, "repairSteps": [], "toolsNeeded": [], "recommended": false }
-  ],
-  "recommendation": "Repair",
-  "recommendationReason": "Clear explanation of why this is the best choice",
-  "sustainabilityInsight": "Broader environmental context and encouragement",
-  "impactMetrics": {
-    "moneySaved": 9600,
-    "ewasteReduced": "1.2 kg",
-    "co2Avoided": 5.2,
-    "landfillDiverted": "0.8 kg"
-  }
-}`;
+Return ONLY valid compact JSON (no markdown, no code fences):
+{"diagnosis":{"primaryIssue":"","likelyCause":"","severity":"minor|moderate|severe","confidence":0.8},"clarifyingQuestions":[],"options":[{"action":"Repair","description":"","estimatedCost":{"min":0,"max":0,"currency":"INR"},"timeRequired":"","difficulty":"beginner|intermediate|advanced","environmentalImpact":{"score":9,"label":"Excellent","kgCO2Saved":5},"repairSteps":[],"toolsNeeded":[],"recommended":true},{"action":"Replace Component","description":"","estimatedCost":{"min":0,"max":0,"currency":"INR"},"timeRequired":"","difficulty":"intermediate","environmentalImpact":{"score":8,"label":"Good","kgCO2Saved":4},"repairSteps":[],"toolsNeeded":[],"recommended":false},{"action":"Resell for Parts","description":"","estimatedCost":{"min":0,"max":0,"currency":"INR"},"timeRequired":"","difficulty":"beginner","environmentalImpact":{"score":7,"label":"Good","kgCO2Saved":3},"repairSteps":[],"toolsNeeded":[],"recommended":false},{"action":"Donate","description":"","estimatedCost":{"min":0,"max":0,"currency":"INR"},"timeRequired":"","difficulty":"beginner","environmentalImpact":{"score":6,"label":"Fair","kgCO2Saved":2},"repairSteps":[],"toolsNeeded":[],"recommended":false},{"action":"Recycle","description":"","estimatedCost":{"min":0,"max":0,"currency":"INR"},"timeRequired":"","difficulty":"beginner","environmentalImpact":{"score":5,"label":"Fair","kgCO2Saved":1},"repairSteps":[],"toolsNeeded":[],"recommended":false}],"recommendation":"Repair","recommendationReason":"","sustainabilityInsight":"","impactMetrics":{"moneySaved":0,"ewasteReduced":"1 kg","co2Avoided":5,"landfillDiverted":"0.8 kg"}}`;
 }
 
 // ── Step 3: Repair Step Detail ─────────────────────────────────────────────────
@@ -91,7 +50,7 @@ Return ONLY valid JSON:
 // ── Public API ─────────────────────────────────────────────────────────────────
 async function generateJsonFromPrompt(promptContent, fallback, errorContext) {
   try {
-    const result = await genAI.getGenerativeModel({ model: MODEL }).generateContent(promptContent);
+    const result = await model.generateContent(promptContent);
     const m = result.response.text().match(/\{[\s\S]*\}/);
     if (m) return JSON.parse(m[0]);
   } catch (err) {
