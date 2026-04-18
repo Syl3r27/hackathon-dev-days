@@ -7,8 +7,13 @@ import { analysisRouter } from './routes/analysis.js';
 import { sessionRouter } from './routes/session.js';
 import { voiceRouter } from './routes/voice.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import connectDB from './lib/db.js';
 
 const app = express();
+
+// Initialize Database connection
+connectDB();
+
 const PORT = process.env.PORT || 3001;
 
 app.use(cors({
