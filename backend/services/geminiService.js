@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 // gemini-1.5-flash: 1,500 req/day free vs 20/day for preview models
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 // Cache model instance — avoids SDK overhead on every call
 const model = genAI.getGenerativeModel({ model: MODEL });
 
