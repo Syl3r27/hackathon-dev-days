@@ -8,6 +8,7 @@ import ScanningScreen from './components/ScanningScreen';
 import DecisionsScreen from './components/DecisionsScreen';
 import RepairScreen from './components/RepairScreen';
 import ImpactScreen from './components/ImpactScreen';
+import RealtimeScreen from './components/RealtimeScreen';
 
 function ErrorToast() {
   const { error, setError } = useAppStore();
@@ -49,6 +50,7 @@ export default function Page() {
           {phase === 'decisions' && <DecisionsScreen />}
           {phase === 'repairing' && <RepairScreen />}
           {phase === 'impact' && <ImpactScreen />}
+          {phase === 'realtime' && <RealtimeScreen />}
         </>
       )}
     </AppInitializer>

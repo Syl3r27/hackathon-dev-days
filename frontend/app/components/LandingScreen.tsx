@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useAuthStore } from '../lib/authStore';
 import { useAppStore } from '../lib/store';
 import { authLogout } from '../lib/api';
-import { Leaf, LogOut, Camera, Recycle, Wrench, Zap } from 'lucide-react';
+import { Leaf, LogOut, Camera, Recycle, Wrench, Zap, Radio } from 'lucide-react';
 
 export default function LandingScreen() {
   const { user, clearAuth } = useAuthStore();
@@ -43,6 +43,12 @@ export default function LandingScreen() {
   const handleStart = () => {
     import('gsap').then(({ gsap }) => {
       gsap.to(ref.current, { opacity: 0, y: -40, duration: 0.6, ease: 'power3.in', onComplete: () => setPhase('scanning') });
+    });
+  };
+
+  const handleRealtime = () => {
+    import('gsap').then(({ gsap }) => {
+      gsap.to(ref.current, { opacity: 0, y: -40, duration: 0.6, ease: 'power3.in', onComplete: () => setPhase('realtime') });
     });
   };
 
@@ -118,6 +124,13 @@ export default function LandingScreen() {
           </div>
         )}
 
+
+        <button onClick={handleRealtime} className="ll-cta secondary-btn py-5 px-10 text-lg shadow-lg mb-20 group border-2">
+          <span className="flex items-center gap-3">
+            <span className="group-hover:scale-110 transition-transform"><Radio size={20} /></span>
+            Real-Time Interaction
+          </span>
+        </button>
         <button onClick={handleStart} className="ll-cta primary-btn py-5 px-10 text-lg shadow-lg mb-20 group">
           <span className="flex items-center gap-3">
             <span className="bg-white/20 p-2 rounded-full group-hover:scale-110 transition-transform"><Camera size={20} /></span>
