@@ -1,7 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const MODEL = 'gemini-3-flash-preview';
+// gemini-1.5-flash: 1,500 req/day free vs 20/day for preview models
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 // Cache model instance — avoids SDK overhead on every call
 const model = genAI.getGenerativeModel({ model: MODEL });
 
@@ -47,14 +48,39 @@ Return ONLY valid JSON:
 }`;
 }
 
-// ── Public API ─────────────────────────────────────────────────────────────────
-async function generateJsonFromPrompt(promptContent, fallback, errorContext) {
-  try {
-    const result = await model.generateContent(promptContent);
-    const m = result.response.text().match(/\{[\s\S]*\}/);
-    if (m) return JSON.parse(m[0]);
-  } catch (err) {
-    console.error(`Gemini API Error (${errorContext}):`, err.message);
+// ── Retry helper ───────────────────────────────────────────────────────────────
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/**
+ * Calls Gemini with up to `maxRetries` automatic retries on 429 rate-limit.
+ * Parses the first JSON object from the response text.
+ */
+async function generateJsonFromPrompt(promptContent, fallback, errorContext, maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await model.generateContent(promptContent);
+      const text = result.response.text();
+      const m = text.match(/\{[\s\S]*\}/);
+      if (m) return JSON.parse(m[0]);
+      console.warn(`[Gemini] ${errorContext}: no JSON in response, using fallback.`);
+      return fallback;
+    } catch (err) {
+      const is429 = err.message?.includes('429') || err.status === 429;
+      if (is429 && attempt < maxRetries) {
+        // Extract retry-after seconds from the error message if present
+        const retryMatch = err.message?.match(/(\d+(?:\.\d+)?)s/);
+        const waitMs = retryMatch ? Math.min(parseFloat(retryMatch[1]) * 1000, 10000) : (attempt + 1) * 3000;
+        console.warn(`[Gemini] ${errorContext}: rate-limited. Retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/${maxRetries})...`);
+        await sleep(waitMs);
+        continue;
+      }
+      if (is429) {
+        console.warn(`[Gemini] ${errorContext}: quota exceeded — returning fallback. Switch to a paid plan or wait for quota reset.`);
+      } else {
+        console.error(`[Gemini] ${errorContext}:`, err.message);
+      }
+      return fallback;
+    }
   }
   return fallback;
 }
