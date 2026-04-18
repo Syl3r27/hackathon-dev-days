@@ -1,7 +1,7 @@
 'use client';
 import { create } from 'zustand';
 
-export type AppPhase = 'auth' | 'landing' | 'scanning' | 'decisions' | 'repairing' | 'impact';
+export type AppPhase = 'auth' | 'landing' | 'scanning' | 'decisions' | 'repairing' | 'impact' | 'realtime';
 
 interface AppState {
   phase: AppPhase;
