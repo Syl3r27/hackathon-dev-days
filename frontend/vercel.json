@@ -1,9 +1,0 @@
-{
-  "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "@next_public_api_url"
-  },
-  "nodejs": "20.x"
-}
