@@ -1,6 +1,6 @@
 # 🌿 ReLife AI v3 — Repair. Reuse. Rethink.
 
-> **Gemini Vision** + **ElevenLabs TTS** + **JWT Auth** + DynamoDB session persistence.
+> **Gemini Vision** + **ElevenLabs TTS** + **JWT Auth** + MongoDB session persistence.
 
 ---
 
@@ -186,13 +186,4 @@ Open **http://localhost:3000** → Register → Scan → hear ElevenLabs guide y
 | "help" / "tips" | Read pro tips aloud |
 
 ---
-
-## 🚢 Production
-
-```bash
-# Backend (Railway / Render)
-NODE_ENV=production npm start
-
-# Frontend (Vercel)
-NEXT_PUBLIC_API_URL=https://your-backend.up.railway.app vercel --prod
 ```
